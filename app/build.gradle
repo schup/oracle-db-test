@@ -1,0 +1,61 @@
+plugins {
+    id 'java'
+    id 'application'
+    alias libs.plugins.shadow
+    alias libs.plugins.lombok
+}
+
+group = 'org.dbtest'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Oracle JDBC Driver
+    implementation libs.ojdbc11
+    
+    // YAML parsing
+    implementation libs.snakeyaml
+    
+    // JSON output
+    implementation libs.gson
+    
+    // Colored console output
+    implementation libs.jansi
+    
+    // Logging - SLF4J API + Log4j2 implementation
+    implementation libs.bundles.logging
+    
+    // Testing
+    testImplementation libs.junit.jupiter
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+application {
+    mainClass = 'org.dbtest.Main'
+}
+
+shadowJar {
+    archiveBaseName.set('oracle-jdbc-test')
+    archiveClassifier.set('')
+    archiveVersion.set(project.version)
+    manifest {
+        attributes 'Main-Class': 'org.dbtest.Main'
+    }
+    mergeServiceFiles()
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// Build shadow jar by default
+build.dependsOn shadowJar

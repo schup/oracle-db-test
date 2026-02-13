@@ -1,0 +1,47 @@
+# Dependency version catalog for Oracle JDBC Connectivity Test Tool
+# https://docs.gradle.org/current/userguide/platforms.html#sub::toml-dependencies-format
+
+[versions]
+# Plugins
+shadow = "9.0.0"
+lombok-plugin = "8.11"
+
+# Dependencies
+ojdbc = "23.3.0.23.09"
+snakeyaml = "2.2"
+gson = "2.10.1"
+jansi = "2.4.1"
+slf4j = "2.0.9"
+log4j = "2.22.0"
+junit-jupiter = "5.10.1"
+junit-platform = "1.10.1"
+
+[libraries]
+# Oracle JDBC Driver
+ojdbc11 = { module = "com.oracle.database.jdbc:ojdbc11", version.ref = "ojdbc" }
+
+# YAML parsing
+snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
+
+# JSON output
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+
+# Colored console output
+jansi = { module = "org.fusesource.jansi:jansi", version.ref = "jansi" }
+
+# Logging
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+log4j-api = { module = "org.apache.logging.log4j:log4j-api", version.ref = "log4j" }
+log4j-core = { module = "org.apache.logging.log4j:log4j-core", version.ref = "log4j" }
+log4j-slf4j2 = { module = "org.apache.logging.log4j:log4j-slf4j2-impl", version.ref = "log4j" }
+
+# Testing
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-platform" }
+
+[bundles]
+logging = ["slf4j-api", "log4j-api", "log4j-core", "log4j-slf4j2"]
+
+[plugins]
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+lombok = { id = "io.freefair.lombok", version.ref = "lombok-plugin" }

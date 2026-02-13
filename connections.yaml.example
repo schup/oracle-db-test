@@ -1,0 +1,53 @@
+# Oracle JDBC Connectivity Test - Example Configuration
+# Copy this file and customize for your environment
+
+connections:
+  # Example: Production database using service name
+  - name: prod-db-primary
+    host: prod-oracle-01.example.com
+    port: 1521
+    service: PRODDB
+    username: app_user
+    password: ${PROD_DB_PASSWORD}  # Use environment variable
+    tags:
+      - production
+      - primary
+    groups:
+      - prod-cluster
+    timeout: 15
+    
+  # Example: Development database using SID
+  - name: dev-db
+    host: dev-oracle.example.com
+    port: 1521
+    sid: DEVDB
+    username: dev_user
+    password: ${DEV_DB_PASSWORD}
+    tags:
+      - development
+    groups:
+      - dev-env
+    enabled: true
+    
+  # Example: Local test database with direct password (not recommended for production)
+  - name: test-db-local
+    host: localhost
+    port: 1521
+    service: XEPDB1
+    username: test_user
+    password: TestPassword123
+    tags:
+      - local
+      - testing
+    test_query: "SELECT 1 FROM DUAL"
+    timeout: 5
+
+# Optional: Password provider configuration
+# password_providers:
+#   # Custom provider example
+#   custom:
+#     type: custom
+#     class: com.example.MyPasswordProvider
+#     config:
+#       api_endpoint: https://api.example.com/credentials
+#       api_key: ${CUSTOM_API_KEY}
