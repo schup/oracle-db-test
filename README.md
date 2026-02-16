@@ -242,6 +242,15 @@ When SSH connections fail, the tool provides layered diagnostics:
     • Confirm username 'admin' is correct
 ```
 
+### Architecture Diagram
+
+See [`docs/ssh-tunnel-architecture.c4`](docs/ssh-tunnel-architecture.c4) for a LikeC4 diagram showing the multi-hop SSH tunnel architecture with port details. View it with:
+
+```bash
+npm install -g likec4
+likec4 serve docs/
+```
+
 ## Password Management
 
 ### Environment Variables

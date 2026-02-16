@@ -1,0 +1,104 @@
+// SSH Tunnel Architecture for Oracle JDBC Connectivity Test Tool
+// This diagram shows multi-hop SSH tunneling with port forwarding
+
+specification {
+  element actor {
+    style {
+      shape person
+      color amber
+    }
+  }
+  element machine {
+    style {
+      shape rectangle
+      color sky
+    }
+  }
+  element jumphost {
+    style {
+      shape rectangle
+      color slate
+    }
+  }
+  element appserver {
+    style {
+      shape rectangle
+      color indigo
+    }
+  }
+  element database {
+    style {
+      shape storage
+      color green
+    }
+  }
+  element service {
+    style {
+      shape rectangle
+      color muted
+    }
+  }
+}
+
+model {
+  user = actor "DBA / Developer"
+
+  clientMachine = machine "Client Machine" {
+    description "Runs oracle-jdbc-test tool"
+
+    tool = service "oracle-jdbc-test" {
+      description "JDBC Test Tool binds localhost:54321"
+    }
+  }
+
+  jumpA = jumphost "Jump Server A (DMZ)" {
+    description "Bastion host - first hop"
+
+    sshdA = service "sshd :22" {
+      description "SSH daemon listening on port 22"
+    }
+  }
+
+  serverB = appserver "Server B (Internal)" {
+    description "Internal server - second hop"
+
+    sshdB = service "sshd :22" {
+      description "SSH daemon listening on port 22"
+    }
+  }
+
+  oracleDB = database "Oracle Database" {
+    description "Target database in secure zone"
+
+    listener = service "TNS Listener :1521" {
+      description "Oracle listener on port 1521"
+    }
+  }
+
+  // Relationships
+  user -> clientMachine "runs tests"
+  clientMachine -> jumpA "SSH Session 1"
+  jumpA -> serverB "SSH Session 2"
+  serverB -> oracleDB "Port Forward"
+  clientMachine -> oracleDB "JDBC Connection (tunneled)"
+}
+
+views {
+  view index {
+    title "Multi-Hop SSH Tunnel Architecture"
+    description "Shows SSH tunnel chain: Client -> Jump A -> Server B -> Oracle DB"
+
+    include *
+  }
+
+  dynamic view tunnelSequence {
+    title 'SSH Tunnel Establishment Sequence'
+
+    user -> clientMachine 'Run connectivity test'
+    clientMachine -> jumpA 'Establish SSH Session 1'
+    jumpA -> serverB 'Establish SSH Session 2'
+    serverB -> oracleDB 'Forward port to database'
+    clientMachine -> oracleDB 'Send JDBC query'
+    oracleDB -> clientMachine 'Return results'
+  }
+}
