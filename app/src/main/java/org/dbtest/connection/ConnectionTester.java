@@ -7,6 +7,8 @@ import org.dbtest.diagnostics.DiagnosticEngine;
 import org.dbtest.diagnostics.DiagnosticResult;
 import org.dbtest.password.PasswordProviderException;
 import org.dbtest.password.PasswordProviderFactory;
+import org.dbtest.ssh.SshException;
+import org.dbtest.ssh.SshTunnelManager;
 
 import java.sql.*;
 import java.util.Properties;
@@ -23,6 +25,7 @@ public class ConnectionTester {
     
     private final PasswordProviderFactory passwordProviderFactory;
     private final DiagnosticEngine diagnosticEngine;
+    private final SshTunnelManager sshTunnelManager;
     
     /**
      * Tests a single database connection.
@@ -49,8 +52,55 @@ public class ConnectionTester {
                 null);
         }
         
-        // Build JDBC URL
-        String jdbcUrl = buildJdbcUrl(conn);
+        // Determine effective host/port (may be modified by SSH tunnel or SOCKS proxy)
+        String effectiveHost = conn.getHost();
+        int effectivePort = conn.getPort();
+        
+        // Set up SSH tunnel if configured
+        if (conn.getSshTunnel() != null && !conn.getSshTunnel().isBlank() && sshTunnelManager != null) {
+            try {
+                log.info("Establishing SSH tunnel '{}' for connection {}", conn.getSshTunnel(), conn.getName());
+                SshTunnelManager.ActiveTunnel tunnel = sshTunnelManager.establishTunnel(
+                    conn.getSshTunnel(), conn.getHost(), conn.getPort());
+                effectiveHost = "localhost";
+                effectivePort = tunnel.localPort();
+                log.info("Tunnel established: localhost:{} -> {}:{}", 
+                    effectivePort, conn.getHost(), conn.getPort());
+            } catch (SshException e) {
+                log.error("SSH tunnel setup failed for {}: {}", conn.getName(), e.getMessage());
+                DiagnosticResult diagnostics = diagnosticEngine.diagnoseSsh(conn, e);
+                return ConnectionResult.failure(conn,
+                    "SSH tunnel failed: " + e.getMessage(),
+                    null,
+                    "SSH_TUNNEL_ERROR",
+                    diagnostics);
+            }
+        }
+        
+        // Set up SOCKS proxy if configured (uses SSH port forwarding under the hood)
+        if (conn.getSocksProxy() != null && !conn.getSocksProxy().isBlank() && sshTunnelManager != null) {
+            try {
+                log.info("Setting up connection via SOCKS proxy '{}' for {}", conn.getSocksProxy(), conn.getName());
+                // Use local port forwarding through the SOCKS proxy session
+                int forwardedPort = sshTunnelManager.createSocksProxyForward(
+                    conn.getSocksProxy(), conn.getHost(), conn.getPort());
+                effectiveHost = "localhost";
+                effectivePort = forwardedPort;
+                log.info("SOCKS proxy forward established: localhost:{} -> {}:{}", 
+                    forwardedPort, conn.getHost(), conn.getPort());
+            } catch (SshException e) {
+                log.error("SOCKS proxy setup failed for {}: {}", conn.getName(), e.getMessage());
+                DiagnosticResult diagnostics = diagnosticEngine.diagnoseSsh(conn, e);
+                return ConnectionResult.failure(conn,
+                    "SOCKS proxy failed: " + e.getMessage(),
+                    null,
+                    "SOCKS_PROXY_ERROR",
+                    diagnostics);
+            }
+        }
+        
+        // Build JDBC URL with effective host/port
+        String jdbcUrl = buildJdbcUrl(effectiveHost, effectivePort, conn);
         log.debug("Connecting to: {}", sanitizeJdbcUrl(jdbcUrl));
         
         // Attempt connection
@@ -104,18 +154,25 @@ public class ConnectionTester {
     }
     
     /**
-     * Builds the JDBC URL for the connection.
+     * Builds the JDBC URL for the connection using effective host/port.
      */
-    public String buildJdbcUrl(ConnectionDefinition conn) {
+    public String buildJdbcUrl(String host, int port, ConnectionDefinition conn) {
         if (conn.usesServiceName()) {
             // Service Name format: jdbc:oracle:thin:@//host:port/service
             return String.format("jdbc:oracle:thin:@//%s:%d/%s",
-                conn.getHost(), conn.getPort(), conn.getService());
+                host, port, conn.getService());
         } else {
             // SID format: jdbc:oracle:thin:@host:port:sid
             return String.format("jdbc:oracle:thin:@%s:%d:%s",
-                conn.getHost(), conn.getPort(), conn.getSid());
+                host, port, conn.getSid());
         }
+    }
+    
+    /**
+     * Builds the JDBC URL for the connection (convenience overload).
+     */
+    public String buildJdbcUrl(ConnectionDefinition conn) {
+        return buildJdbcUrl(conn.getHost(), conn.getPort(), conn);
     }
     
     /**

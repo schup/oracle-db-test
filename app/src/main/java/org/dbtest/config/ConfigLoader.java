@@ -5,6 +5,9 @@ import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;
 import org.yaml.snakeyaml.LoaderOptions;
 
+import org.dbtest.ssh.SshTunnelConfig;
+import org.dbtest.ssh.SocksProxyConfig;
+
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -115,6 +118,28 @@ public class ConfigLoader {
             builder.passwordProviders(providers);
         }
         
+        // Parse SSH tunnels
+        Map<String, Map<String, Object>> tunnelsMap = 
+            (Map<String, Map<String, Object>>) yamlData.get("ssh_tunnels");
+        if (tunnelsMap != null) {
+            Map<String, SshTunnelConfig> tunnels = new HashMap<>();
+            for (Map.Entry<String, Map<String, Object>> entry : tunnelsMap.entrySet()) {
+                tunnels.put(entry.getKey(), parseSshTunnel(entry.getValue()));
+            }
+            builder.sshTunnels(tunnels);
+        }
+        
+        // Parse SOCKS proxies
+        Map<String, Map<String, Object>> socksMap = 
+            (Map<String, Map<String, Object>>) yamlData.get("socks_proxies");
+        if (socksMap != null) {
+            Map<String, SocksProxyConfig> proxies = new HashMap<>();
+            for (Map.Entry<String, Map<String, Object>> entry : socksMap.entrySet()) {
+                proxies.put(entry.getKey(), parseSocksProxy(entry.getValue()));
+            }
+            builder.socksProxies(proxies);
+        }
+        
         return builder.build();
     }
     
@@ -158,6 +183,10 @@ public class ConfigLoader {
             builder.enabled((Boolean) enabledObj);
         }
         
+        // SSH tunnel and SOCKS proxy references
+        builder.sshTunnel((String) connMap.get("ssh_tunnel"));
+        builder.socksProxy((String) connMap.get("socks_proxy"));
+        
         return builder.build();
     }
     
@@ -171,6 +200,66 @@ public class ConfigLoader {
         Map<String, Object> config = (Map<String, Object>) providerMap.get("config");
         if (config != null) {
             builder.config(new HashMap<>(config));
+        }
+        
+        return builder.build();
+    }
+    
+    private SshTunnelConfig parseSshTunnel(Map<String, Object> tunnelMap) {
+        SshTunnelConfig.SshTunnelConfigBuilder builder = SshTunnelConfig.builder();
+        
+        builder.host((String) tunnelMap.get("host"));
+        
+        Object portObj = tunnelMap.get("port");
+        if (portObj != null) {
+            builder.port(((Number) portObj).intValue());
+        }
+        
+        builder.username((String) tunnelMap.get("username"));
+        builder.privateKey((String) tunnelMap.get("private_key"));
+        builder.privateKeyPassphrase((String) tunnelMap.get("private_key_passphrase"));
+        builder.password((String) tunnelMap.get("password"));
+        builder.knownHosts((String) tunnelMap.get("known_hosts"));
+        builder.jumpHost((String) tunnelMap.get("jump_host"));
+        
+        Object localPortObj = tunnelMap.get("local_port");
+        if (localPortObj != null) {
+            builder.localPort(((Number) localPortObj).intValue());
+        }
+        
+        Object timeoutObj = tunnelMap.get("timeout");
+        if (timeoutObj != null) {
+            builder.timeout(((Number) timeoutObj).intValue());
+        }
+        
+        return builder.build();
+    }
+    
+    private SocksProxyConfig parseSocksProxy(Map<String, Object> proxyMap) {
+        SocksProxyConfig.SocksProxyConfigBuilder builder = SocksProxyConfig.builder();
+        
+        builder.host((String) proxyMap.get("host"));
+        
+        Object portObj = proxyMap.get("port");
+        if (portObj != null) {
+            builder.port(((Number) portObj).intValue());
+        }
+        
+        builder.username((String) proxyMap.get("username"));
+        builder.privateKey((String) proxyMap.get("private_key"));
+        builder.privateKeyPassphrase((String) proxyMap.get("private_key_passphrase"));
+        builder.password((String) proxyMap.get("password"));
+        builder.knownHosts((String) proxyMap.get("known_hosts"));
+        builder.jumpHost((String) proxyMap.get("jump_host"));
+        
+        Object localPortObj = proxyMap.get("local_port");
+        if (localPortObj != null) {
+            builder.localPort(((Number) localPortObj).intValue());
+        }
+        
+        Object timeoutObj = proxyMap.get("timeout");
+        if (timeoutObj != null) {
+            builder.timeout(((Number) timeoutObj).intValue());
         }
         
         return builder.build();
@@ -191,7 +280,20 @@ public class ConfigLoader {
         Map<String, String> namesSeen = new HashMap<>();
         
         for (ConnectionDefinition conn : config.getConnections()) {
-            validateConnection(conn, namesSeen, config.getPasswordProviders(), errors);
+            validateConnection(conn, namesSeen, config.getPasswordProviders(),
+                config.getSshTunnels(), config.getSocksProxies(), errors);
+        }
+        
+        // Validate SSH tunnel jump host references
+        if (config.getSshTunnels() != null) {
+            for (Map.Entry<String, SshTunnelConfig> entry : config.getSshTunnels().entrySet()) {
+                SshTunnelConfig tunnel = entry.getValue();
+                if (tunnel.hasJumpHost() && !config.getSshTunnels().containsKey(tunnel.getJumpHost())) {
+                    errors.add(ValidationError.global(
+                        String.format("SSH tunnel '%s' references unknown jump_host '%s'",
+                            entry.getKey(), tunnel.getJumpHost())));
+                }
+            }
         }
         
         return errors;
@@ -200,6 +302,8 @@ public class ConfigLoader {
     private void validateConnection(ConnectionDefinition conn, 
                                     Map<String, String> namesSeen,
                                     Map<String, PasswordProviderConfig> providers,
+                                    Map<String, SshTunnelConfig> tunnels,
+                                    Map<String, SocksProxyConfig> proxies,
                                     List<ValidationError> errors) {
         String connName = conn.getName();
         
@@ -283,6 +387,31 @@ public class ConfigLoader {
                 errors.add(ValidationError.forField(connName, "timeout", 
                     String.format("Timeout must be between %d and %d seconds", MIN_TIMEOUT, MAX_TIMEOUT)));
             }
+        }
+        
+        // Validate SSH tunnel reference
+        if (conn.getSshTunnel() != null && !conn.getSshTunnel().isBlank()) {
+            if (tunnels == null || !tunnels.containsKey(conn.getSshTunnel())) {
+                errors.add(ValidationError.forConnection(connName,
+                    String.format("SSH tunnel '%s' not found in ssh_tunnels configuration.",
+                        conn.getSshTunnel())));
+            }
+        }
+        
+        // Validate SOCKS proxy reference
+        if (conn.getSocksProxy() != null && !conn.getSocksProxy().isBlank()) {
+            if (proxies == null || !proxies.containsKey(conn.getSocksProxy())) {
+                errors.add(ValidationError.forConnection(connName,
+                    String.format("SOCKS proxy '%s' not found in socks_proxies configuration.",
+                        conn.getSocksProxy())));
+            }
+        }
+        
+        // Cannot use both tunnel and SOCKS proxy
+        if (conn.getSshTunnel() != null && !conn.getSshTunnel().isBlank()
+                && conn.getSocksProxy() != null && !conn.getSocksProxy().isBlank()) {
+            errors.add(ValidationError.forConnection(connName,
+                "Cannot specify both 'ssh_tunnel' and 'socks_proxy'. Use only one."));
         }
     }
     

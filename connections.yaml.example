@@ -42,6 +42,45 @@ connections:
     test_query: "SELECT 1 FROM DUAL"
     timeout: 5
 
+# SSH Tunnels - define reusable SSH tunnel configurations
+# ssh_tunnels:
+#   prod-bastion:
+#     host: bastion.example.com
+#     port: 22
+#     username: admin
+#     private_key: ~/.ssh/id_rsa
+#     private_key_passphrase: ${SSH_PASSPHRASE}  # optional
+#     # known_hosts: ~/.ssh/known_hosts  # optional, for host verification
+#   
+#   # Multi-hop example: jump through first server to reach second
+#   internal-via-jump:
+#     host: server-b.internal
+#     port: 22
+#     username: dbadmin
+#     private_key: ~/.ssh/id_ed25519
+#     jump_host: prod-bastion  # reference another tunnel as jump host
+
+# SOCKS Proxies - SSH dynamic port forwarding
+# socks_proxies:
+#   dev-socks:
+#     host: dev-bastion.example.com
+#     port: 22
+#     username: ${USER}
+#     private_key: ~/.ssh/id_ed25519
+#     local_port: 1080
+
+# Example connection using SSH tunnel:
+#   - name: prod-db-via-bastion
+#     host: internal-db.example.com  # target (from bastion's perspective)
+#     port: 1521
+#     service: PRODDB
+#     username: app_user
+#     password: ${PROD_DB_PASSWORD}
+#     ssh_tunnel: prod-bastion  # reference tunnel by name
+#     tags:
+#       - production
+#       - tunneled
+
 # Optional: Password provider configuration
 # password_providers:
 #   # Custom provider example

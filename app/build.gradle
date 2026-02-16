@@ -28,6 +28,9 @@ dependencies {
     // Logging - SLF4J API + Log4j2 implementation
     implementation libs.bundles.logging
     
+    // SSH support
+    implementation libs.jsch
+    
     // Testing
     testImplementation libs.junit.jupiter
     testRuntimeOnly libs.junit.platform.launcher

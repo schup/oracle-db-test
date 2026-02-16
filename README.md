@@ -62,6 +62,7 @@ java -jar oracle-jdbc-test-1.0.0.jar --tag=production --verbose --junit-xml=resu
 | `--tag` | `-t` | Filter by tag(s) - comma-separated |
 | `--only` | `-o` | Test only specified connections |
 | `--verbose` | `-v` | Enable verbose/debug output |
+| `--ssh-verbose` | | Enable verbose SSH debug output |
 | `--json-output` | `-j` | Write JSON results to file |
 | `--junit-xml` | `-x` | Write JUnit XML results to file |
 | `--help` | `-h` | Show help message |
@@ -119,6 +120,127 @@ connections:
 | `timeout` | No | Connection timeout in seconds (default: 10) |
 | `enabled` | No | Set to false to skip (default: true) |
 | `test_query` | No | Custom test query (default: SELECT 1 FROM DUAL) |
+| `ssh_tunnel` | No | Reference to SSH tunnel configuration name |
+| `socks_proxy` | No | Reference to SOCKS proxy configuration name |
+
+## SSH Tunnels and SOCKS Proxies
+
+For databases behind firewalls or bastion hosts, the tool supports SSH tunnels and SOCKS proxies.
+
+### SSH Tunnel Configuration
+
+Define SSH tunnels in a separate `ssh_tunnels` section and reference them from connections:
+
+```yaml
+ssh_tunnels:
+  prod-bastion:
+    host: bastion.example.com
+    port: 22
+    username: admin
+    private_key: ~/.ssh/id_rsa
+    private_key_passphrase: ${SSH_PASSPHRASE}  # optional
+    # known_hosts: ~/.ssh/known_hosts  # optional
+
+connections:
+  - name: prod-db-via-tunnel
+    host: internal-db.example.com  # target host (from bastion's perspective)
+    port: 1521
+    service: PRODDB
+    username: app_user
+    password: ${PROD_PASSWORD}
+    ssh_tunnel: prod-bastion  # reference by name
+```
+
+### Multi-hop SSH Tunnels (Jump Hosts)
+
+For databases accessible only through multiple jump servers:
+
+```yaml
+ssh_tunnels:
+  # First hop - public bastion
+  jump-server-a:
+    host: jump-a.example.com
+    port: 22
+    username: admin
+    private_key: ~/.ssh/id_rsa
+
+  # Second hop - internal server (reached via first hop)
+  internal-via-jump:
+    host: server-b.internal      # address as seen from jump-server-a
+    port: 22
+    username: dbadmin
+    private_key: ~/.ssh/id_ed25519
+    jump_host: jump-server-a     # reference the first hop
+
+connections:
+  - name: secure-db
+    host: db.secure.internal     # address as seen from server-b
+    port: 1521
+    service: SECUREDB
+    username: secure_user
+    password: ${SECURE_PASSWORD}
+    ssh_tunnel: internal-via-jump
+```
+
+### SOCKS Proxy Configuration
+
+For dynamic port forwarding (SSH SOCKS proxy):
+
+```yaml
+socks_proxies:
+  dev-socks:
+    host: dev-bastion.example.com
+    port: 22
+    username: ${USER}
+    private_key: ~/.ssh/id_ed25519
+    local_port: 1080  # local SOCKS port
+
+connections:
+  - name: dev-db-via-socks
+    host: internal-dev.example.com
+    port: 1521
+    service: DEVDB
+    username: dev_user
+    password: ${DEV_PASSWORD}
+    socks_proxy: dev-socks
+```
+
+### SSH Authentication Options
+
+| Field | Description |
+|-------|-------------|
+| `host` | SSH server hostname |
+| `port` | SSH port (default: 22) |
+| `username` | SSH username |
+| `private_key` | Path to private key file (supports ~ expansion) |
+| `private_key_passphrase` | Passphrase for encrypted key |
+| `password` | SSH password (alternative to key) |
+| `known_hosts` | Path to known_hosts file |
+| `jump_host` | Reference to another tunnel for multi-hop |
+| `timeout` | Connection timeout in seconds (default: 30) |
+
+### Troubleshooting SSH Connections
+
+Use `--ssh-verbose` for detailed SSH debug output:
+
+```bash
+java -jar oracle-jdbc-test-1.0.0.jar --ssh-verbose
+```
+
+When SSH connections fail, the tool provides layered diagnostics:
+
+```
+[✗] prod-db-via-tunnel
+    SSH Chain: bastion.example.com → internal-db.example.com:1521
+    
+    Hop 1 (prod-bastion): ✓ Connected (45ms)
+    Error: SSH authentication failed for admin@bastion.example.com
+    
+    Recommendations:
+    • Verify the private key is authorized on the server
+    • Check key file permissions are 600: chmod 600 ~/.ssh/id_rsa
+    • Confirm username 'admin' is correct
+```
 
 ## Password Management
 

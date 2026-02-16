@@ -16,6 +16,7 @@ public class CommandLineArgs {
     Set<String> tags;
     Set<String> onlyNames;
     boolean verbose;
+    boolean sshVerbose;
     String jsonOutput;
     String junitXmlOutput;
     boolean help;
@@ -39,6 +40,8 @@ public class CommandLineArgs {
                 builder.version(true);
             } else if (arg.equals("-v") || arg.equals("--verbose")) {
                 builder.verbose(true);
+            } else if (arg.equals("--ssh-verbose")) {
+                builder.sshVerbose(true);
             } else if (arg.startsWith("-c=") || arg.startsWith("--config=")) {
                 builder.configPath(extractValue(arg));
             } else if ((arg.equals("-c") || arg.equals("--config")) && i + 1 < args.length) {
@@ -86,6 +89,7 @@ public class CommandLineArgs {
         System.out.println("  -t, --tag <tags>         Filter by tag(s) - comma-separated");
         System.out.println("  -o, --only <names>       Test only specified connections - comma-separated");
         System.out.println("  -v, --verbose            Enable verbose/debug output");
+        System.out.println("      --ssh-verbose        Enable verbose SSH debug output");
         System.out.println("  -j, --json-output <path> Write JSON results to file");
         System.out.println("  -x, --junit-xml <path>   Write JUnit XML results to file");
         System.out.println("  -h, --help               Show this help message");

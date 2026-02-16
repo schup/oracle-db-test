@@ -48,6 +48,12 @@ public class ConnectionDefinition {
     @Builder.Default
     private Boolean enabled = true;
     
+    /** Reference to SSH tunnel configuration name */
+    private String sshTunnel;
+    
+    /** Reference to SOCKS proxy configuration name */
+    private String socksProxy;
+    
     /**
      * Returns the service name or SID, whichever is defined.
      */

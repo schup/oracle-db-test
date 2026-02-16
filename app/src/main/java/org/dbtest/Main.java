@@ -14,6 +14,7 @@ import org.dbtest.diagnostics.DiagnosticEngine;
 import org.dbtest.output.*;
 import org.dbtest.password.PasswordProviderException;
 import org.dbtest.password.PasswordProviderFactory;
+import org.dbtest.ssh.SshTunnelManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -102,15 +103,39 @@ public class Main {
         
         // Initialize components
         DiagnosticEngine diagnosticEngine = new DiagnosticEngine();
-        ConnectionTester connectionTester = new ConnectionTester(passwordProviderFactory, diagnosticEngine);
+        diagnosticEngine.setSshTunnelConfigs(config.getSshTunnels());
+        diagnosticEngine.setSocksProxyConfigs(config.getSocksProxies());
+        
+        // Initialize SSH tunnel manager if any connections use tunnels/proxies
+        SshTunnelManager sshTunnelManager = null;
+        boolean needsSsh = connections.stream().anyMatch(c -> 
+            (c.getSshTunnel() != null && !c.getSshTunnel().isBlank()) ||
+            (c.getSocksProxy() != null && !c.getSocksProxy().isBlank()));
+        
+        if (needsSsh) {
+            sshTunnelManager = new SshTunnelManager(
+                config.getSshTunnels(),
+                config.getSocksProxies(),
+                cliArgs.isSshVerbose() || cliArgs.isVerbose());
+        }
+        
+        ConnectionTester connectionTester = new ConnectionTester(
+            passwordProviderFactory, diagnosticEngine, sshTunnelManager);
         
         // Run tests
         long startTime = System.currentTimeMillis();
         List<ConnectionResult> results = new ArrayList<>();
         
-        for (ConnectionDefinition conn : connections) {
-            ConnectionResult result = connectionTester.test(conn);
-            results.add(result);
+        try {
+            for (ConnectionDefinition conn : connections) {
+                ConnectionResult result = connectionTester.test(conn);
+                results.add(result);
+            }
+        } finally {
+            // Clean up SSH connections
+            if (sshTunnelManager != null) {
+                sshTunnelManager.close();
+            }
         }
         
         long duration = System.currentTimeMillis() - startTime;

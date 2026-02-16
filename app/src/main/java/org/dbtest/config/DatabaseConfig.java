@@ -4,6 +4,8 @@ import lombok.Data;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import org.dbtest.ssh.SshTunnelConfig;
+import org.dbtest.ssh.SocksProxyConfig;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,4 +26,10 @@ public class DatabaseConfig {
     
     @Builder.Default
     private Map<String, PasswordProviderConfig> passwordProviders = new HashMap<>();
+    
+    @Builder.Default
+    private Map<String, SshTunnelConfig> sshTunnels = new HashMap<>();
+    
+    @Builder.Default
+    private Map<String, SocksProxyConfig> socksProxies = new HashMap<>();
 }
