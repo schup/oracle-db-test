@@ -2,7 +2,6 @@ package org.dbtest.config;
 
 import lombok.extern.slf4j.Slf4j;
 import org.yaml.snakeyaml.Yaml;
-import org.yaml.snakeyaml.constructor.Constructor;
 import org.yaml.snakeyaml.LoaderOptions;
 
 import org.dbtest.ssh.SshTunnelConfig;
@@ -67,7 +66,6 @@ public class ConfigLoader {
     /**
      * Loads configuration from an input stream.
      */
-    @SuppressWarnings("unchecked")
     public DatabaseConfig loadFromStream(InputStream input) throws ConfigurationException {
         Yaml yaml = new Yaml(new LoaderOptions());
         

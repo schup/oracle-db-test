@@ -6,7 +6,6 @@ import org.dbtest.config.ConnectionDefinition;
 import org.dbtest.diagnostics.DiagnosticResult;
 
 import java.time.Instant;
-import java.util.List;
 
 /**
  * Represents the result of testing a single database connection.

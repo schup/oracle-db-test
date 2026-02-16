@@ -21,10 +21,11 @@ Thumbs.db
 # Logs
 *.log
 logs/
+result.xml
+results.xml
 
 # Test output
 test-results/
-*.xml
 
 # Local config (may contain passwords)
 connections-local.yaml

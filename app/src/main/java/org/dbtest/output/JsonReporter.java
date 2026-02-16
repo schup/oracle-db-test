@@ -9,7 +9,6 @@ import org.dbtest.diagnostics.DiagnosticResult;
 
 import java.io.FileWriter;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;

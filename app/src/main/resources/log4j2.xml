@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <!-- Console appender for normal output -->
+        <Console name="Console" target="SYSTEM_ERR">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n"/>
+            <ThresholdFilter level="DEBUG" onMatch="ACCEPT" onMismatch="DENY"/>
+        </Console>
+    </Appenders>
+    
+    <Loggers>
+        <Root level="WARN">
+            <AppenderRef ref="Console"/>
+        </Root>
+        
+        <Logger name="org.dbtest" level="WARN" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+        
+        <!-- Silence verbose third-party libraries -->
+        <Logger name="org.yaml.snakeyaml" level="WARN"/>
+        <Logger name="com.google.gson" level="WARN"/>
+        <Logger name="oracle.jdbc" level="WARN"/>
+    </Loggers>
+</Configuration>
