@@ -54,7 +54,7 @@ public class Main {
         
         // Configure logging level
         if (cliArgs.isVerbose()) {
-            Configurator.setRootLevel(Level.DEBUG);
+            Configurator.setLevel("org.dbtest", Level.DEBUG);
             log.debug("Verbose mode enabled");
         }
         

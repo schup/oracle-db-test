@@ -1,5 +1,6 @@
 package org.dbtest.output;
 
+import org.dbtest.config.ConnectionDefinition;
 import org.dbtest.connection.ConnectionResult;
 import org.dbtest.diagnostics.DiagnosticResult;
 import org.fusesource.jansi.Ansi;
@@ -107,6 +108,9 @@ public class ConsoleReporter implements Reporter {
             System.out.println(String.format("    SID: %s", conn.getSid()));
         }
         
+        System.out.println(String.format("    User: %s", conn.getUsername()));
+        System.out.println(String.format("    JDBC URL: %s", buildJdbcUrl(conn)));
+        
         System.out.println(ansi().fg(Ansi.Color.RED)
             .a("    Error: ").a(result.getErrorMessage()).reset());
         
@@ -204,5 +208,15 @@ public class ConsoleReporter implements Reporter {
             .a("Exit Code: ").bold().a(exitCode).reset());
         
         System.out.println();
+    }
+    
+    private String buildJdbcUrl(ConnectionDefinition conn) {
+        if (conn.usesServiceName()) {
+            return String.format("jdbc:oracle:thin:@//%s:%d/%s",
+                conn.getHost(), conn.getPort(), conn.getService());
+        } else {
+            return String.format("jdbc:oracle:thin:@%s:%d:%s",
+                conn.getHost(), conn.getPort(), conn.getSid());
+        }
     }
 }
