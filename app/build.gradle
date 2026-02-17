@@ -5,9 +5,6 @@ plugins {
     alias libs.plugins.lombok
 }
 
-group = 'org.dbtest'
-version = '1.0.0'
-
 repositories {
     mavenCentral()
 }
