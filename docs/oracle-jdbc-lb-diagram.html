@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oracle JDBC Connection Flow & Load Balancing DNS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;1,300&display=swap');
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2330;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --accent-blue: #58a6ff;
+    --accent-green: #3fb950;
+    --accent-orange: #f0883e;
+    --accent-red: #f85149;
+    --accent-purple: #bc8cff;
+    --accent-yellow: #d29922;
+    --glow-blue: rgba(88, 166, 255, 0.15);
+    --glow-green: rgba(63, 185, 80, 0.15);
+    --glow-red: rgba(248, 81, 73, 0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  h1 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-family: 'IBM Plex Mono', monospace;
+    margin-bottom: 2rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* ---- DIAGRAM PANEL ---- */
+  .diagram-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    position: relative;
+  }
+
+  .diagram-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 1.2rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.6rem;
+  }
+
+  svg#diagram {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* ---- TABS ---- */
+  .tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .tab {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .tab:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+  .tab.active { background: var(--glow-blue); border-color: var(--accent-blue); color: var(--accent-blue); }
+  .tab.problem.active { background: var(--glow-red); border-color: var(--accent-red); color: var(--accent-red); }
+
+  /* ---- RIGHT PANEL ---- */
+  .info-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+  }
+
+  .card-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 0.7rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.4rem;
+  }
+
+  .step-list { list-style: none; }
+
+  .step-item {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+    border-radius: 4px;
+    padding-left: 0.4rem;
+  }
+  .step-item:last-child { border-bottom: none; }
+  .step-item:hover { background: var(--surface2); }
+  .step-item.active { background: var(--surface2); }
+
+  .step-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    min-width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+
+  .step-text {
+    font-size: 0.82rem;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .step-text em { color: var(--muted); font-style: normal; font-size: 0.78rem; display: block; }
+
+  .step-item[data-color="blue"] .step-num { background: var(--glow-blue); color: var(--accent-blue); border: 1px solid var(--accent-blue); }
+  .step-item[data-color="orange"] .step-num { background: rgba(240,136,62,0.15); color: var(--accent-orange); border: 1px solid var(--accent-orange); }
+  .step-item[data-color="green"] .step-num { background: var(--glow-green); color: var(--accent-green); border: 1px solid var(--accent-green); }
+  .step-item[data-color="red"] .step-num { background: var(--glow-red); color: var(--accent-red); border: 1px solid var(--accent-red); }
+  .step-item[data-color="purple"] .step-num { background: rgba(188,140,255,0.15); color: var(--accent-purple); border: 1px solid var(--accent-purple); }
+
+  .warning-box {
+    background: rgba(248, 81, 73, 0.07);
+    border: 1px solid rgba(248, 81, 73, 0.35);
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+    font-size: 0.82rem;
+    color: #ffb3af;
+  }
+  .warning-box strong { color: var(--accent-red); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; display: block; margin-bottom: 0.35rem; font-family: 'IBM Plex Mono', monospace; }
+
+  .fix-box {
+    background: rgba(63, 185, 80, 0.07);
+    border: 1px solid rgba(63, 185, 80, 0.35);
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+    font-size: 0.82rem;
+    color: #a8e6b0;
+  }
+  .fix-box strong { color: var(--accent-green); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; display: block; margin-bottom: 0.35rem; font-family: 'IBM Plex Mono', monospace; }
+  .fix-box ul { padding-left: 1rem; }
+  .fix-box li { margin-bottom: 0.25rem; }
+
+  code {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.05rem 0.35rem;
+    color: var(--accent-orange);
+  }
+
+  /* DIAGRAM elements */
+  .node-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; }
+  .node-sub { font-family: 'IBM Plex Sans', sans-serif; font-size: 9.5px; fill: #7d8590; }
+  .port-tag { font-family: 'IBM Plex Mono', monospace; font-size: 9px; font-weight: 600; }
+  .arrow-label { font-family: 'IBM Plex Mono', monospace; font-size: 9px; }
+  .step-badge { font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 700; }
+
+  .hidden { display: none; }
+
+  /* Animation for active step highlight */
+  @keyframes pulse-border {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .active-highlight { animation: pulse-border 1.5s ease-in-out infinite; }
+
+</style>
+</head>
+<body>
+
+<div style="max-width:1200px;margin:0 auto;">
+  <h1>Oracle JDBC · Two-Port Connection Flow</h1>
+  <p class="subtitle">// listener redirect model &amp; load-balancing DNS implications</p>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('normal', this)">Normal Flow</button>
+    <button class="tab problem" onclick="showTab('problem', this)">LB DNS Problem</button>
+    <button class="tab" onclick="showTab('solution', this)">RAC / SCAN Solution</button>
+  </div>
+
+  <div class="layout">
+
+    <!-- DIAGRAM AREA -->
+    <div class="diagram-panel">
+      <div class="diagram-title">Connection Architecture Diagram</div>
+
+      <!-- NORMAL FLOW SVG -->
+      <svg id="diagram-normal" viewBox="0 0 620 420" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#58a6ff"/>
+          </marker>
+          <marker id="arr-orange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#f0883e"/>
+          </marker>
+          <marker id="arr-green" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#3fb950"/>
+          </marker>
+          <marker id="arr-red" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#f85149"/>
+          </marker>
+          <marker id="arr-purple" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#bc8cff"/>
+          </marker>
+          <filter id="glow-blue">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+          </filter>
+        </defs>
+
+        <!-- Background grid -->
+        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1c2330" stroke-width="0.5"/>
+        </pattern>
+        <rect width="620" height="420" fill="url(#grid)"/>
+
+        <!-- ===== CLIENT ===== -->
+        <rect x="20" y="165" width="120" height="72" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+        <rect x="20" y="165" width="120" height="16" rx="6" fill="#1c2330"/>
+        <rect x="20" y="175" width="120" height="6" rx="0" fill="#1c2330"/>
+        <text x="80" y="178" text-anchor="middle" class="node-label" fill="#e6edf3">CLIENT APP</text>
+        <text x="80" y="198" text-anchor="middle" class="node-sub">JDBC Thin Driver</text>
+        <text x="80" y="213" text-anchor="middle" class="node-sub">jdbc:oracle:thin:@host:1521/svc</text>
+        <text x="80" y="228" text-anchor="middle" class="node-sub" style="fill:#58a6ff">Src port: ephemeral</text>
+
+        <!-- ===== DNS ===== -->
+        <rect x="220" y="80" width="110" height="60" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+        <rect x="220" y="80" width="110" height="14" rx="4" fill="#1c2330"/>
+        <rect x="220" y="88" width="110" height="6" fill="#1c2330"/>
+        <text x="275" y="91" text-anchor="middle" class="node-label" fill="#e6edf3">DNS</text>
+        <text x="275" y="109" text-anchor="middle" class="node-sub">db.example.com</text>
+        <text x="275" y="123" text-anchor="middle" class="node-sub" style="fill:#58a6ff">→ 10.0.0.1</text>
+        <text x="275" y="134" text-anchor="middle" class="node-sub" style="fill:#7d8590">(single host)</text>
+
+        <!-- DNS query arrow -->
+        <line x1="140" y1="185" x2="215" y2="125" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-blue)"/>
+        <rect x="149" y="143" width="50" height="14" rx="3" fill="#161b22"/>
+        <text x="174" y="153" text-anchor="middle" class="arrow-label" fill="#58a6ff">① DNS query</text>
+
+        <!-- DNS response arrow -->
+        <line x1="220" y1="132" x2="152" y2="190" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-blue)"/>
+        <rect x="148" y="158" width="58" height="14" rx="3" fill="#161b22"/>
+        <text x="177" y="168" text-anchor="middle" class="arrow-label" fill="#58a6ff">→ 10.0.0.1</text>
+
+        <!-- ===== LISTENER ===== -->
+        <rect x="380" y="100" width="130" height="90" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+        <rect x="380" y="100" width="130" height="16" rx="4" fill="#1c2330"/>
+        <rect x="380" y="108" width="130" height="8" fill="#1c2330"/>
+        <text x="445" y="113" text-anchor="middle" class="node-label" fill="#e6edf3">LISTENER</text>
+        <text x="445" y="135" text-anchor="middle" class="node-sub">10.0.0.1</text>
+        <!-- Port badge -->
+        <rect x="396" y="143" width="98" height="18" rx="9" fill="#0d1f38" stroke="#58a6ff" stroke-width="1.2"/>
+        <text x="445" y="156" text-anchor="middle" class="port-tag" fill="#58a6ff">PORT 1521</text>
+        <text x="445" y="177" text-anchor="middle" class="node-sub">TNS / IPC router</text>
+
+        <!-- Connection Step 2: client → listener:1521 -->
+        <line x1="140" y1="196" x2="376" y2="155" stroke="#58a6ff" stroke-width="2" marker-end="url(#arr-blue)"/>
+        <rect x="220" y="163" width="100" height="14" rx="3" fill="#161b22"/>
+        <text x="270" y="173" text-anchor="middle" class="arrow-label" fill="#58a6ff">② TCP connect :1521</text>
+
+        <!-- ===== DEDICATED SERVER PROCESS ===== -->
+        <rect x="380" y="270" width="130" height="100" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+        <rect x="380" y="270" width="130" height="16" rx="4" fill="#1c2330"/>
+        <rect x="380" y="278" width="130" height="8" fill="#1c2330"/>
+        <text x="445" y="283" text-anchor="middle" class="node-label" fill="#e6edf3">ORACLE SERVER</text>
+        <text x="445" y="302" text-anchor="middle" class="node-sub">Dedicated / Shared</text>
+        <text x="445" y="315" text-anchor="middle" class="node-sub">Server Process</text>
+        <!-- Dynamic port badge -->
+        <rect x="392" y="322" width="106" height="18" rx="9" fill="#0d2a1a" stroke="#3fb950" stroke-width="1.2"/>
+        <text x="445" y="335" text-anchor="middle" class="port-tag" fill="#3fb950">PORT 59821 (dyn)</text>
+        <text x="445" y="354" text-anchor="middle" class="node-sub">Handles actual SQL</text>
+
+        <!-- Listener spawns/finds server process -->
+        <line x1="445" y1="190" x2="445" y2="266" stroke="#f0883e" stroke-width="1.8" stroke-dasharray="5,3" marker-end="url(#arr-orange)"/>
+        <rect x="452" y="220" width="100" height="22" rx="3" fill="#161b22"/>
+        <text x="502" y="231" text-anchor="middle" class="arrow-label" fill="#f0883e">③ spawn / find</text>
+        <text x="502" y="241" text-anchor="middle" class="arrow-label" fill="#f0883e">server process</text>
+
+        <!-- Listener sends redirect back to client -->
+        <path d="M380,170 Q290,170 270,215 Q250,255 155,220" fill="none" stroke="#f0883e" stroke-width="1.8" marker-end="url(#arr-orange)"/>
+        <rect x="188" y="195" width="100" height="22" rx="3" fill="#161b22"/>
+        <text x="238" y="206" text-anchor="middle" class="arrow-label" fill="#f0883e">④ REDIRECT:</text>
+        <text x="238" y="216" text-anchor="middle" class="arrow-label" fill="#f0883e">10.0.0.1:59821</text>
+
+        <!-- Client re-connects to server process directly -->
+        <path d="M140,220 Q280,300 376,310" fill="none" stroke="#3fb950" stroke-width="2" marker-end="url(#arr-green)"/>
+        <rect x="205" y="277" width="110" height="22" rx="3" fill="#161b22"/>
+        <text x="260" y="288" text-anchor="middle" class="arrow-label" fill="#3fb950">⑤ NEW TCP conn</text>
+        <text x="260" y="298" text-anchor="middle" class="arrow-label" fill="#3fb950">to :59821 (same IP)</text>
+
+        <!-- CLOSED original connection note -->
+        <rect x="20" y="285" width="155" height="40" rx="5" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="97" y="300" text-anchor="middle" class="node-sub" style="font-size:8.5px;fill:#7d8590">Original :1521 connection</text>
+        <text x="97" y="313" text-anchor="middle" class="node-sub" style="font-size:8.5px;fill:#f85149">closed after redirect</text>
+
+        <!-- FINAL session note -->
+        <rect x="20" y="340" width="155" height="40" rx="5" fill="#0d2a1a" stroke="#3fb950" stroke-width="1"/>
+        <text x="97" y="355" text-anchor="middle" class="node-sub" style="font-size:8.5px;fill:#3fb950">⑥ SQL session active</text>
+        <text x="97" y="368" text-anchor="middle" class="node-sub" style="font-size:8.5px;fill:#3fb950">on dynamic port</text>
+      </svg>
+
+      <!-- PROBLEM FLOW SVG -->
+      <svg id="diagram-problem" viewBox="0 0 620 440" xmlns="http://www.w3.org/2000/svg" class="hidden">
+        <defs>
+          <marker id="arr-blue2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#58a6ff"/>
+          </marker>
+          <marker id="arr-green2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#3fb950"/>
+          </marker>
+          <marker id="arr-red2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#f85149"/>
+          </marker>
+          <marker id="arr-orange2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#f0883e"/>
+          </marker>
+        </defs>
+
+        <pattern id="grid2" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1c2330" stroke-width="0.5"/>
+        </pattern>
+        <rect width="620" height="440" fill="url(#grid2)"/>
+
+        <!-- CLIENT -->
+        <rect x="20" y="180" width="120" height="60" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+        <rect x="20" y="180" width="120" height="14" rx="4" fill="#1c2330"/>
+        <rect x="20" y="188" width="120" height="6" fill="#1c2330"/>
+        <text x="80" y="193" text-anchor="middle" class="node-label" fill="#e6edf3">CLIENT APP</text>
+        <text x="80" y="212" text-anchor="middle" class="node-sub">JDBC Thin</text>
+        <text x="80" y="228" text-anchor="middle" class="node-sub" style="fill:#58a6ff">jdbc:@db.example.com:1521</text>
+
+        <!-- LB DNS cloud -->
+        <ellipse cx="275" cy="80" rx="90" ry="42" fill="#161b22" stroke="#d29922" stroke-width="1.5" stroke-dasharray="4,2"/>
+        <text x="275" y="70" text-anchor="middle" class="node-label" fill="#d29922">LB DNS</text>
+        <text x="275" y="85" text-anchor="middle" class="node-sub">db.example.com</text>
+        <text x="275" y="97" text-anchor="middle" class="node-sub" style="fill:#d29922">RR → 10.0.0.1 / .2 / .3</text>
+
+        <!-- DNS query -->
+        <line x1="140" y1="196" x2="210" y2="112" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-blue2)"/>
+        <rect x="126" y="145" width="62" height="14" rx="3" fill="#161b22"/>
+        <text x="157" y="155" text-anchor="middle" class="arrow-label" fill="#58a6ff">① DNS query</text>
+
+        <!-- DNS resolves to Node 1 -->
+        <line x1="220" y1="108" x2="155" y2="202" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-blue2)"/>
+        <rect x="143" y="163" width="60" height="14" rx="3" fill="#161b22"/>
+        <text x="173" y="173" text-anchor="middle" class="arrow-label" fill="#58a6ff">→ 10.0.0.1</text>
+
+        <!-- NODE 1 - Listener -->
+        <rect x="430" y="140" width="130" height="80" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+        <rect x="430" y="140" width="130" height="14" rx="4" fill="#1c2330"/>
+        <rect x="430" y="148" width="130" height="6" fill="#1c2330"/>
+        <text x="495" y="153" text-anchor="middle" class="node-label" fill="#e6edf3">NODE 1 LISTENER</text>
+        <text x="495" y="172" text-anchor="middle" class="node-sub">10.0.0.1</text>
+        <rect x="446" y="178" width="98" height="17" rx="8" fill="#0d1f38" stroke="#58a6ff" stroke-width="1.2"/>
+        <text x="495" y="190" text-anchor="middle" class="port-tag" fill="#58a6ff">PORT 1521</text>
+        <text x="495" y="208" text-anchor="middle" class="node-sub">Listener process</text>
+
+        <!-- connect to node 1:1521 -->
+        <line x1="140" y1="210" x2="426" y2="185" stroke="#58a6ff" stroke-width="2" marker-end="url(#arr-blue2)"/>
+        <rect x="240" y="185" width="100" height="14" rx="3" fill="#161b22"/>
+        <text x="290" y="195" text-anchor="middle" class="arrow-label" fill="#58a6ff">② TCP :1521 → 10.0.0.1</text>
+
+        <!-- PROBLEM REDIRECT - listener returns internal hostname -->
+        <path d="M430,185 Q320,185 295,230 Q275,265 155,228" fill="none" stroke="#f0883e" stroke-width="1.8" marker-end="url(#arr-orange2)"/>
+        <rect x="220" y="223" width="120" height="22" rx="3" fill="#161b22"/>
+        <text x="280" y="234" text-anchor="middle" class="arrow-label" fill="#f0883e">③ REDIRECT:</text>
+        <text x="280" y="244" text-anchor="middle" class="arrow-label" fill="#f0883e">node1.internal:52340</text>
+
+        <!-- SECOND DNS LOOKUP - potentially different IP! -->
+        <ellipse cx="275" cy="315" rx="90" ry="38" fill="#1a0d0d" stroke="#f85149" stroke-width="1.5" stroke-dasharray="4,2"/>
+        <text x="275" y="307" text-anchor="middle" class="node-label" fill="#f85149">DNS (AGAIN)</text>
+        <text x="275" y="321" text-anchor="middle" class="node-sub" style="fill:#f85149">node1.internal ?</text>
+        <text x="275" y="333" text-anchor="middle" class="node-sub" style="fill:#7d8590">or resolves to wrong IP</text>
+
+        <!-- client re-queries DNS for redirect host -->
+        <line x1="140" y1="240" x2="194" y2="305" stroke="#f85149" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#arr-red2)"/>
+        <rect x="100" y="268" width="72" height="14" rx="3" fill="#161b22"/>
+        <text x="136" y="278" text-anchor="middle" class="arrow-label" fill="#f85149">④ re-resolve</text>
+
+        <!-- Problem box 1 -->
+        <rect x="20" y="363" width="580" height="58" rx="6" fill="#1a0d0d" stroke="#f85149" stroke-width="1.2"/>
+        <text x="30" y="381" class="arrow-label" fill="#f85149" font-weight="700">⚠ POTENTIAL FAILURE POINTS:</text>
+        <text x="30" y="397" class="arrow-label" fill="#ffb3af">A) Hostname in redirect is unresolvable from client network</text>
+        <text x="30" y="411" class="arrow-label" fill="#ffb3af">B) Firewall only allows port 1521 — dynamic port blocked</text>
+
+        <!-- Problem indicators on redirect path -->
+        <circle cx="340" cy="240" r="10" fill="#f85149" opacity="0.2"/>
+        <text x="340" y="244" text-anchor="middle" class="arrow-label" fill="#f85149" font-weight="700">!</text>
+
+        <!-- Node 2 (greyed, bypassed) -->
+        <rect x="430" y="270" width="130" height="65" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1" opacity="0.4"/>
+        <text x="495" y="295" text-anchor="middle" class="node-label" fill="#7d8590">NODE 2</text>
+        <text x="495" y="311" text-anchor="middle" class="node-sub" style="fill:#3d4451">10.0.0.2 — bypassed</text>
+        <text x="495" y="325" text-anchor="middle" class="node-sub" style="fill:#3d4451">LB has no effect here</text>
+
+        <!-- X marks on the path -->
+        <line x1="380" y1="310" x2="360" y2="290" stroke="#f85149" stroke-width="2"/>
+        <line x1="360" y1="310" x2="380" y2="290" stroke="#f85149" stroke-width="2"/>
+      </svg>
+
+      <!-- SOLUTION FLOW SVG -->
+      <svg id="diagram-solution" viewBox="0 0 620 440" xmlns="http://www.w3.org/2000/svg" class="hidden">
+        <defs>
+          <marker id="arr-blue3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#58a6ff"/>
+          </marker>
+          <marker id="arr-green3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#3fb950"/>
+          </marker>
+          <marker id="arr-orange3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#f0883e"/>
+          </marker>
+          <marker id="arr-purple3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#bc8cff"/>
+          </marker>
+        </defs>
+
+        <pattern id="grid3" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1c2330" stroke-width="0.5"/>
+        </pattern>
+        <rect width="620" height="440" fill="url(#grid3)"/>
+
+        <!-- CLIENT -->
+        <rect x="10" y="170" width="120" height="72" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+        <rect x="10" y="170" width="120" height="14" rx="4" fill="#1c2330"/>
+        <rect x="10" y="178" width="120" height="6" fill="#1c2330"/>
+        <text x="70" y="183" text-anchor="middle" class="node-label" fill="#e6edf3">CLIENT APP</text>
+        <text x="70" y="202" text-anchor="middle" class="node-sub">JDBC Thin</text>
+        <text x="70" y="217" text-anchor="middle" class="node-sub" style="fill:#bc8cff">jdbc:@scan.example.com</text>
+        <text x="70" y="230" text-anchor="middle" class="node-sub" style="fill:#bc8cff">:1521/service</text>
+
+        <!-- SCAN DNS - resolves to all 3 IPs -->
+        <rect x="210" y="60" width="150" height="75" rx="6" fill="#161b22" stroke="#bc8cff" stroke-width="1.5"/>
+        <rect x="210" y="60" width="150" height="14" rx="4" fill="#1e1530"/>
+        <rect x="210" y="68" width="150" height="6" fill="#1e1530"/>
+        <text x="285" y="73" text-anchor="middle" class="node-label" fill="#bc8cff">SCAN DNS</text>
+        <text x="285" y="93" text-anchor="middle" class="node-sub">scan.example.com</text>
+        <text x="285" y="107" text-anchor="middle" class="node-sub" style="fill:#bc8cff">→ 10.0.0.10 / .11 / .12</text>
+        <text x="285" y="121" text-anchor="middle" class="node-sub" style="fill:#7d8590">(VIPs, all on SCAN listener)</text>
+
+        <!-- DNS query -->
+        <line x1="130" y1="187" x2="208" y2="115" stroke="#bc8cff" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-purple3)"/>
+        <rect x="128" y="144" width="58" height="14" rx="3" fill="#161b22"/>
+        <text x="157" y="154" text-anchor="middle" class="arrow-label" fill="#bc8cff">① SCAN DNS</text>
+
+        <!-- SCAN LISTENER (central, routes to any node) -->
+        <rect x="390" y="85" width="140" height="80" rx="6" fill="#161b22" stroke="#bc8cff" stroke-width="1.5"/>
+        <rect x="390" y="85" width="140" height="14" rx="4" fill="#1e1530"/>
+        <rect x="390" y="93" width="140" height="6" fill="#1e1530"/>
+        <text x="460" y="98" text-anchor="middle" class="node-label" fill="#bc8cff">SCAN LISTENER</text>
+        <text x="460" y="118" text-anchor="middle" class="node-sub">Floating VIPs — any node</text>
+        <rect x="406" y="126" width="108" height="17" rx="8" fill="#1e1530" stroke="#bc8cff" stroke-width="1.2"/>
+        <text x="460" y="138" text-anchor="middle" class="port-tag" fill="#bc8cff">PORT 1521</text>
+        <text x="460" y="155" text-anchor="middle" class="node-sub">Routes based on service load</text>
+
+        <!-- Connect to SCAN listener -->
+        <line x1="130" y1="197" x2="386" y2="140" stroke="#bc8cff" stroke-width="2" marker-end="url(#arr-purple3)"/>
+        <rect x="222" y="157" width="110" height="14" rx="3" fill="#161b22"/>
+        <text x="277" y="167" text-anchor="middle" class="arrow-label" fill="#bc8cff">② TCP :1521 → SCAN VIP</text>
+
+        <!-- SCAN redirect - returns NODE VIP (always reachable) -->
+        <path d="M390,130 Q305,130 290,180 Q280,210 150,210" fill="none" stroke="#f0883e" stroke-width="1.8" marker-end="url(#arr-orange3)"/>
+        <rect x="206" y="178" width="130" height="22" rx="3" fill="#161b22"/>
+        <text x="271" y="189" text-anchor="middle" class="arrow-label" fill="#f0883e">③ REDIRECT to NODE VIP:</text>
+        <text x="271" y="199" text-anchor="middle" class="arrow-label" fill="#f0883e">10.0.1.2:52340 (known good)</text>
+
+        <!-- 3 RAC Nodes -->
+        <!-- Node 1 -->
+        <rect x="390" y="200" width="110" height="58" rx="5" fill="#161b22" stroke="#30363d" stroke-width="1.2"/>
+        <text x="445" y="222" text-anchor="middle" class="node-label" fill="#e6edf3">NODE 1</text>
+        <text x="445" y="237" text-anchor="middle" class="node-sub" style="fill:#3fb950">VIP: 10.0.1.1</text>
+        <rect x="400" y="244" width="90" height="8" rx="4" fill="#0d2a1a"/>
+        <text x="445" y="251" text-anchor="middle" class="node-sub" style="font-size:8px;fill:#3fb950">ACTIVE SESSION</text>
+
+        <!-- Node 2 - highlighted (selected) -->
+        <rect x="390" y="272" width="110" height="58" rx="5" fill="#0d2a1a" stroke="#3fb950" stroke-width="1.5"/>
+        <text x="445" y="294" text-anchor="middle" class="node-label" fill="#3fb950">NODE 2</text>
+        <text x="445" y="309" text-anchor="middle" class="node-sub" style="fill:#3fb950">VIP: 10.0.1.2</text>
+        <rect x="400" y="316" width="90" height="8" rx="4" fill="#0d2a1a"/>
+        <text x="445" y="323" text-anchor="middle" class="node-sub" style="font-size:8px;fill:#3fb950">← ROUTED HERE</text>
+
+        <!-- Node 3 -->
+        <rect x="390" y="344" width="110" height="58" rx="5" fill="#161b22" stroke="#30363d" stroke-width="1.2"/>
+        <text x="445" y="366" text-anchor="middle" class="node-label" fill="#e6edf3">NODE 3</text>
+        <text x="445" y="381" text-anchor="middle" class="node-sub" style="fill:#3fb950">VIP: 10.0.1.3</text>
+        <rect x="400" y="387" width="90" height="8" rx="4" fill="#0d2a1a"/>
+        <text x="445" y="394" text-anchor="middle" class="node-sub" style="font-size:8px;fill:#3fb950">ACTIVE SESSION</text>
+
+        <!-- SCAN connects to nodes via private interconnect -->
+        <line x1="460" y1="165" x2="448" y2="196" stroke="#bc8cff" stroke-width="1.2" stroke-dasharray="3,2" marker-end="url(#arr-purple3)"/>
+        <line x1="460" y1="165" x2="450" y2="268" stroke="#bc8cff" stroke-width="1.2" stroke-dasharray="3,2" marker-end="url(#arr-purple3)"/>
+        <line x1="460" y1="165" x2="452" y2="340" stroke="#bc8cff" stroke-width="1.2" stroke-dasharray="3,2" marker-end="url(#arr-purple3)"/>
+
+        <!-- Client connects to Node 2 VIP -->
+        <path d="M130,220 Q280,280 385,300" fill="none" stroke="#3fb950" stroke-width="2" marker-end="url(#arr-green3)"/>
+        <rect x="196" y="268" width="120" height="22" rx="3" fill="#161b22"/>
+        <text x="256" y="279" text-anchor="middle" class="arrow-label" fill="#3fb950">④ NEW TCP → NODE VIP</text>
+        <text x="256" y="289" text-anchor="middle" class="arrow-label" fill="#3fb950">10.0.1.2:52340</text>
+
+        <!-- Solution note -->
+        <rect x="10" y="363" width="365" height="58" rx="6" fill="#0d2a1a" stroke="#3fb950" stroke-width="1.2"/>
+        <text x="20" y="381" class="arrow-label" fill="#3fb950" font-weight="700">✓ WHY THIS WORKS:</text>
+        <text x="20" y="397" class="arrow-label" fill="#a8e6b0">SCAN redirects to Node VIPs — always routable &amp; stable</text>
+        <text x="20" y="411" class="arrow-label" fill="#a8e6b0">SCAN listener is load-balanced by Oracle internally across nodes</text>
+      </svg>
+    </div>
+
+    <!-- INFO PANEL -->
+    <div class="info-panel">
+
+      <!-- Normal flow steps -->
+      <div id="info-normal" class="card">
+        <div class="card-label">Connection Steps</div>
+        <ul class="step-list">
+          <li class="step-item" data-color="blue">
+            <span class="step-num">①</span>
+            <span class="step-text">DNS Resolution<em>Client resolves hostname → single IP (e.g. 10.0.0.1)</em></span>
+          </li>
+          <li class="step-item" data-color="blue">
+            <span class="step-num">②</span>
+            <span class="step-text">TCP Connect to Port 1521<em>Client opens TCP connection to listener on the well-known port</em></span>
+          </li>
+          <li class="step-item" data-color="orange">
+            <span class="step-num">③</span>
+            <span class="step-text">Listener Forks a Server Process<em>Listener spawns (dedicated) or locates (shared) a server process, which binds to a random ephemeral port</em></span>
+          </li>
+          <li class="step-item" data-color="orange">
+            <span class="step-num">④</span>
+            <span class="step-text">Redirect Response<em>Listener sends back a new address + port (e.g. 10.0.0.1:59821). The original :1521 connection is then closed.</em></span>
+          </li>
+          <li class="step-item" data-color="green">
+            <span class="step-num">⑤</span>
+            <span class="step-text">Second TCP Connection<em>Client opens a brand new TCP connection directly to the server process on the dynamic port</em></span>
+          </li>
+          <li class="step-item" data-color="green">
+            <span class="step-num">⑥</span>
+            <span class="step-text">SQL Session Active<em>All SQL traffic flows on this second connection. The listener is no longer involved.</em></span>
+          </li>
+        </ul>
+      </div>
+
+      <div id="info-problem" class="card hidden">
+        <div class="card-label">Why LB DNS Breaks This</div>
+        <div class="warning-box">
+          <strong>⚠ Core Problem</strong>
+          The redirect response from the listener contains a hostname or IP for the <em>second</em> connection. With plain LB DNS, this address may be:
+          <ul style="padding-left:1rem;margin-top:0.4rem;">
+            <li>An internal hostname the client can't resolve</li>
+            <li>A node IP bypassing the load balancer</li>
+            <li>Blocked by a firewall that only allows :1521</li>
+          </ul>
+        </div>
+        <ul class="step-list" style="margin-top:0.7rem;">
+          <li class="step-item" data-color="blue">
+            <span class="step-num">①②</span>
+            <span class="step-text">DNS &amp; Initial Connect work fine<em>LB DNS resolves to e.g. 10.0.0.1, client connects to :1521 — no issue yet</em></span>
+          </li>
+          <li class="step-item" data-color="red">
+            <span class="step-num">③</span>
+            <span class="step-text">Redirect contains internal address<em>Listener on 10.0.0.1 responds with <code>node1.internal:52340</code> — its own hostname, not the LB DNS name</em></span>
+          </li>
+          <li class="step-item" data-color="red">
+            <span class="step-num">④</span>
+            <span class="step-text">Second connection fails or bypasses LB<em>Client must resolve the redirect host. The load balancer is completely bypassed for the actual session.</em></span>
+          </li>
+        </ul>
+      </div>
+
+      <div id="info-solution" class="card hidden">
+        <div class="card-label">Solutions</div>
+        <div class="fix-box">
+          <strong>✓ Oracle RAC + SCAN (Recommended)</strong>
+          Single Client Access Name (SCAN) is Oracle's purpose-built solution. The SCAN listener routes to node VIPs — addresses that are always stable and routable. No LB DNS games needed.
+        </div>
+        <ul class="step-list" style="margin-top:0.7rem;">
+          <li class="step-item" data-color="purple">
+            <span class="step-num">①</span>
+            <span class="step-text">Connect to SCAN hostname<em>SCAN DNS returns up to 3 SCAN VIP addresses. Client picks one and connects on :1521</em></span>
+          </li>
+          <li class="step-item" data-color="purple">
+            <span class="step-num">②③</span>
+            <span class="step-text">SCAN listener routes to a node<em>Internally load-balanced. Returns a redirect to a Node VIP — a stable, known-routable address</em></span>
+          </li>
+          <li class="step-item" data-color="green">
+            <span class="step-num">④</span>
+            <span class="step-text">Client connects to Node VIP directly<em>The Node VIP is always reachable; firewall rules can be set to allow the dynamic port range from the node VIPs</em></span>
+          </li>
+        </ul>
+        <div class="fix-box" style="margin-top:0.7rem;">
+          <strong>Other Options (single-node)</strong>
+          <ul>
+            <li>Configure <code>LOCAL_LISTENER</code> to return the LB VIP in redirects</li>
+            <li>Use connection pooling (DRCP / UCP) to avoid per-session redirects</li>
+            <li>Allow dynamic port range in firewall between client and DB host</li>
+            <li>Use <code>SERVER=SHARED</code> with dispatcher — dispatcher port is fixed &amp; configurable</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  function showTab(name, btn) {
+    // update tab button styles
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+
+    // hide all diagrams and info panels
+    ['normal','problem','solution'].forEach(n => {
+      document.getElementById('diagram-' + n).classList.add('hidden');
+      document.getElementById('info-' + n).classList.add('hidden');
+    });
+
+    // show selected
+    document.getElementById('diagram-' + name).classList.remove('hidden');
+    document.getElementById('info-' + name).classList.remove('hidden');
+  }
+</script>
+</body>
+</html>

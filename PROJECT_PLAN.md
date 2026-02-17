@@ -7,7 +7,7 @@ A standalone Java-based tool to test Oracle database connectivity with comprehen
 - **Language**: Java 17+ (LTS)
 - **Build Tool**: Gradle with Wrapper
 - **Build Output**: Shadow JAR (single executable JAR)
-- **JDBC Driver**: Oracle ojdbc8-thin or ojdbc11-thin
+- **JDBC Driver**: Oracle ojdbc17-thin
 - **Minimal Dependencies**:
   - Oracle JDBC Driver (required)
   - SnakeYAML (for YAML parsing)

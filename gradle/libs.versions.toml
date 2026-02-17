@@ -7,7 +7,7 @@ shadow = "9.0.0"
 lombok-plugin = "8.11"
 
 # Dependencies
-ojdbc = "23.3.0.23.09"
+ojdbc = "23.26.1.0.0"
 snakeyaml = "2.2"
 gson = "2.10.1"
 jansi = "2.4.1"
@@ -19,7 +19,7 @@ jsch = "0.2.18"
 
 [libraries]
 # Oracle JDBC Driver
-ojdbc11 = { module = "com.oracle.database.jdbc:ojdbc11", version.ref = "ojdbc" }
+ojdbc17 = { module = "com.oracle.database.jdbc:ojdbc17", version.ref = "ojdbc" }
 
 # YAML parsing
 snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
