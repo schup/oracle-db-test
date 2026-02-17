@@ -120,42 +120,9 @@ public class JunitXmlReporter implements Reporter {
         writer.println(escapeXml(message));
         writer.println();
         
-        DiagnosticResult diagnostics = result.getDiagnostics();
-        if (diagnostics != null) {
-            writer.println("Diagnostics:");
-            
-            var dnsCheck = diagnostics.getDnsCheck();
-            if (dnsCheck != null) {
-                if (dnsCheck.isSuccess()) {
-                    writer.printf("- DNS Resolution: SUCCESS (%dms) → %s%n",
-                        dnsCheck.getResolutionTimeMs(), dnsCheck.getResolvedIp());
-                } else {
-                    writer.printf("- DNS Resolution: FAILED - %s%n", dnsCheck.getErrorMessage());
-                }
-            }
-            
-            var portCheck = diagnostics.getPortCheck();
-            if (portCheck != null) {
-                if (portCheck.isPortOpen()) {
-                    writer.println("- Port Reachability: SUCCESS - Port is open");
-                } else {
-                    writer.printf("- Port Reachability: FAILED - %s%n", 
-                        portCheck.getErrorMessage() != null ? portCheck.getErrorMessage() : "Port not reachable");
-                }
-            }
-            
-            if (diagnostics.getAnalysis() != null) {
-                writer.printf("- Analysis: %s%n", diagnostics.getAnalysis());
-            }
-            
-            var recommendations = diagnostics.getRecommendations();
-            if (recommendations != null && !recommendations.isEmpty()) {
-                writer.println();
-                writer.println("Recommendations:");
-                for (String rec : recommendations) {
-                    writer.printf("• %s%n", rec);
-                }
-            }
+        // Use shared formatter for diagnostics
+        for (String line : ConnectionInfoFormatter.formatDiagnostics(result.getDiagnostics())) {
+            writer.println(escapeXml(line));
         }
         
         writer.println("      </failure>");
@@ -169,22 +136,20 @@ public class JunitXmlReporter implements Reporter {
         var conn = result.getConnection();
         
         writer.println("      <system-out>");
-        writer.printf("Host: %s:%d%n", conn.getHost(), conn.getPort());
         
-        if (conn.usesServiceName()) {
-            writer.printf("Service: %s%n", conn.getService());
-        } else {
-            writer.printf("SID: %s%n", conn.getSid());
+        // Use shared formatter for connection info
+        for (String line : ConnectionInfoFormatter.formatConnectionInfo(result)) {
+            writer.println(escapeXml(line));
         }
         
         if (result.isSuccess()) {
-            writer.printf("Version: %s%n", result.getDatabaseVersion());
-            writer.printf("Connection Time: %dms%n", result.getConnectionTimeMs());
-            writer.printf("Test Query: OK (%dms)%n", result.getTestQueryTimeMs());
+            for (String line : ConnectionInfoFormatter.formatSuccessInfo(result)) {
+                writer.println(escapeXml(line));
+            }
         }
         
         if (conn.getTags() != null && !conn.getTags().isEmpty()) {
-            writer.printf("Tags: %s%n", String.join(", ", conn.getTags()));
+            writer.printf("Tags: %s%n", escapeXml(String.join(", ", conn.getTags())));
         }
         
         writer.println("      </system-out>");

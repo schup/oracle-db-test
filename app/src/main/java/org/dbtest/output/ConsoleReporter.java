@@ -81,11 +81,11 @@ public class ConsoleReporter implements Reporter {
             .a("[✓] ").a(conn.getName()).reset()
             .fg(Ansi.Color.WHITE).a(tags).reset());
         
-        printConnectionInfo(conn, result.getJdbcTrace());
+        printConnectionInfo(result);
         
-        System.out.println(String.format("    Version: %s", result.getDatabaseVersion()));
-        System.out.println(String.format("    Connection Time: %dms", result.getConnectionTimeMs()));
-        System.out.println(String.format("    Test Query: OK (%dms)", result.getTestQueryTimeMs()));
+        for (String line : ConnectionInfoFormatter.formatSuccessInfo(result)) {
+            System.out.println("    " + line);
+        }
     }
     
     private void printFailure(ConnectionResult result, String tags) {
@@ -95,7 +95,7 @@ public class ConsoleReporter implements Reporter {
             .a("[✗] ").a(conn.getName()).reset()
             .fg(Ansi.Color.WHITE).a(tags).reset());
         
-        printConnectionInfo(conn, result.getJdbcTrace());
+        printConnectionInfo(result);
         
         System.out.println(ansi().fg(Ansi.Color.RED)
             .a("    Error: ").a(result.getErrorMessage()).reset());
@@ -196,34 +196,9 @@ public class ConsoleReporter implements Reporter {
         System.out.println();
     }
     
-    private void printConnectionInfo(ConnectionDefinition conn, JdbcTraceInfo trace) {
-        String serviceOrSid = conn.usesServiceName() 
-            ? "Service: " + conn.getService() 
-            : "SID: " + conn.getSid();
-        System.out.println(String.format("    Host: %s:%d  %s  User: %s", 
-            conn.getHost(), conn.getPort(), serviceOrSid, conn.getUsername()));
-        
-        // Show actual data connection from JDBC trace if available
-        if (trace != null && trace.getDataHost() != null) {
-            String dataEndpoint = trace.getDataEndpoint();
-            String connectStatus = "";
-            if (trace.getConnectTimeMs() != null) {
-                String symbol = Boolean.TRUE.equals(trace.getConnectSucceeded()) ? "✓" : "✗";
-                connectStatus = String.format(" [%s %dms]", symbol, trace.getConnectTimeMs());
-            }
-            System.out.println(String.format("    Connected to: %s%s", dataEndpoint, connectStatus));
-        }
-        
-        System.out.println(String.format("    JDBC URL: %s", buildJdbcUrl(conn)));
-    }
-    
-    private String buildJdbcUrl(ConnectionDefinition conn) {
-        if (conn.usesServiceName()) {
-            return String.format("jdbc:oracle:thin:@//%s:%d/%s",
-                conn.getHost(), conn.getPort(), conn.getService());
-        } else {
-            return String.format("jdbc:oracle:thin:@%s:%d:%s",
-                conn.getHost(), conn.getPort(), conn.getSid());
+    private void printConnectionInfo(ConnectionResult result) {
+        for (String line : ConnectionInfoFormatter.formatConnectionInfo(result)) {
+            System.out.println("    " + line);
         }
     }
 }
