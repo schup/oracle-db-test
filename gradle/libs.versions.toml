@@ -3,18 +3,17 @@
 
 [versions]
 # Plugins
-shadow = "9.0.0"
-lombok-plugin = "8.11"
+shadow = "9.3.1"
+lombok-plugin = "9.2.0"
 
 # Dependencies
 ojdbc = "23.26.1.0.0"
-snakeyaml = "2.2"
-gson = "2.10.1"
-jansi = "2.4.1"
-slf4j = "2.0.9"
-log4j = "2.22.0"
-junit-jupiter = "5.10.1"
-junit-platform = "1.10.1"
+snakeyaml = "2.5"
+gson = "2.13.2"
+jansi = "2.4.2"
+slf4j = "2.0.17"
+log4j = "2.25.3"
+junit = "6.0.3"
 jsch = "0.2.18"
 
 [libraries]
@@ -40,8 +39,8 @@ log4j-slf4j2 = { module = "org.apache.logging.log4j:log4j-slf4j2-impl", version.
 jsch = { module = "com.github.mwiede:jsch", version.ref = "jsch" }
 
 # Testing
-junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
-junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-platform" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit" }
 
 [bundles]
 logging = ["slf4j-api", "log4j-api", "log4j-core", "log4j-slf4j2"]
