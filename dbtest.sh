@@ -13,4 +13,4 @@ if [[ ! -f "$JAR_PATH" ]]; then
     exit 2
 fi
 
-exec java -Doracle.jdbc.diagnostic.enableLogging=true -Djava.util.logging.config.file=jul.properties -jar "$JAR_PATH" "$@"
+exec java -jar "$JAR_PATH" "$@"

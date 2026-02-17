@@ -3,6 +3,7 @@ package org.dbtest.output;
 import org.dbtest.config.ConnectionDefinition;
 import org.dbtest.connection.ConnectionResult;
 import org.dbtest.diagnostics.DiagnosticResult;
+import org.dbtest.diagnostics.JdbcTraceInfo;
 import org.fusesource.jansi.Ansi;
 import org.fusesource.jansi.AnsiConsole;
 
@@ -114,10 +115,41 @@ public class ConsoleReporter implements Reporter {
         System.out.println(ansi().fg(Ansi.Color.RED)
             .a("    Error: ").a(result.getErrorMessage()).reset());
         
+        // Print JDBC trace info if available
+        JdbcTraceInfo trace = result.getJdbcTrace();
+        if (trace != null) {
+            printJdbcTrace(trace);
+        }
+        
         // Print diagnostics
         DiagnosticResult diagnostics = result.getDiagnostics();
         if (diagnostics != null) {
             printDiagnostics(diagnostics);
+        }
+    }
+    
+    private void printJdbcTrace(JdbcTraceInfo trace) {
+        System.out.println();
+        System.out.println(ansi().fg(Ansi.Color.CYAN).a("    Connection Details:").reset());
+        
+        // Show actual data connection if we have it
+        if (trace.getDataHost() != null) {
+            String dataEndpoint = trace.getDataEndpoint();
+            System.out.println(String.format("    ├─ Data Connection: %s", dataEndpoint));
+            
+            if (trace.getConnectTimeMs() != null) {
+                String status = Boolean.TRUE.equals(trace.getConnectSucceeded()) ? "✓" : "✗";
+                Ansi.Color color = Boolean.TRUE.equals(trace.getConnectSucceeded()) 
+                    ? Ansi.Color.GREEN : Ansi.Color.RED;
+                System.out.println(ansi().fg(color)
+                    .a(String.format("    ├─ TCP Connect: %s (%dms)", status, trace.getConnectTimeMs()))
+                    .reset());
+            }
+        }
+        
+        // Show server host if different from data host (indicates RAC/redirect)
+        if (trace.getServerHost() != null) {
+            System.out.println(String.format("    └─ Server Host: %s", trace.getServerHost()));
         }
     }
     

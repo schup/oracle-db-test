@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Value;
 import org.dbtest.config.ConnectionDefinition;
 import org.dbtest.diagnostics.DiagnosticResult;
+import org.dbtest.diagnostics.JdbcTraceInfo;
 
 import java.time.Instant;
 
@@ -80,6 +81,11 @@ public class ConnectionResult {
     DiagnosticResult diagnostics;
     
     /**
+     * JDBC trace information extracted from Oracle driver logs.
+     */
+    JdbcTraceInfo jdbcTrace;
+    
+    /**
      * Returns true if the test was successful.
      */
     public boolean isSuccess() {
@@ -93,7 +99,8 @@ public class ConnectionResult {
                                            String databaseVersion,
                                            String versionNumber,
                                            long connectionTimeMs, 
-                                           long testQueryTimeMs) {
+                                           long testQueryTimeMs,
+                                           JdbcTraceInfo jdbcTrace) {
         return ConnectionResult.builder()
             .connection(conn)
             .status(Status.SUCCESS)
@@ -101,6 +108,7 @@ public class ConnectionResult {
             .versionNumber(versionNumber)
             .connectionTimeMs(connectionTimeMs)
             .testQueryTimeMs(testQueryTimeMs)
+            .jdbcTrace(jdbcTrace)
             .build();
     }
     
@@ -111,7 +119,8 @@ public class ConnectionResult {
                                           String errorMessage,
                                           String errorCode,
                                           String errorType,
-                                          DiagnosticResult diagnostics) {
+                                          DiagnosticResult diagnostics,
+                                          JdbcTraceInfo jdbcTrace) {
         return ConnectionResult.builder()
             .connection(conn)
             .status(Status.FAILED)
@@ -119,6 +128,7 @@ public class ConnectionResult {
             .errorCode(errorCode)
             .errorType(errorType)
             .diagnostics(diagnostics)
+            .jdbcTrace(jdbcTrace)
             .build();
     }
     

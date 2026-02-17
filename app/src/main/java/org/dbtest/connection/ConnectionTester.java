@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.dbtest.config.ConnectionDefinition;
 import org.dbtest.diagnostics.DiagnosticEngine;
 import org.dbtest.diagnostics.DiagnosticResult;
+import org.dbtest.diagnostics.JdbcTraceCapture;
+import org.dbtest.diagnostics.JdbcTraceInfo;
 import org.dbtest.password.PasswordProviderException;
 import org.dbtest.password.PasswordProviderFactory;
 import org.dbtest.ssh.SshException;
@@ -26,6 +28,7 @@ public class ConnectionTester {
     private final PasswordProviderFactory passwordProviderFactory;
     private final DiagnosticEngine diagnosticEngine;
     private final SshTunnelManager sshTunnelManager;
+    private final boolean verbose;
     
     /**
      * Tests a single database connection.
@@ -49,6 +52,7 @@ public class ConnectionTester {
                 "Password retrieval failed: " + e.getMessage(),
                 null,
                 "PASSWORD_ERROR",
+                null,
                 null);
         }
         
@@ -73,7 +77,8 @@ public class ConnectionTester {
                     "SSH tunnel failed: " + e.getMessage(),
                     null,
                     "SSH_TUNNEL_ERROR",
-                    diagnostics);
+                    diagnostics,
+                    null);
             }
         }
         
@@ -95,7 +100,8 @@ public class ConnectionTester {
                     "SOCKS proxy failed: " + e.getMessage(),
                     null,
                     "SOCKS_PROXY_ERROR",
-                    diagnostics);
+                    diagnostics,
+                    null);
             }
         }
         
@@ -103,8 +109,13 @@ public class ConnectionTester {
         String jdbcUrl = buildJdbcUrl(effectiveHost, effectivePort, conn);
         log.debug("Connecting to: {}", sanitizeJdbcUrl(jdbcUrl));
         
+        // Start JDBC trace capture
+        JdbcTraceCapture traceCapture = new JdbcTraceCapture(verbose);
+        traceCapture.startCapture();
+        
         // Attempt connection
         long startTime = System.currentTimeMillis();
+        JdbcTraceInfo jdbcTrace = null;
         
         try {
             Properties props = new Properties();
@@ -115,6 +126,10 @@ public class ConnectionTester {
             
             try (Connection connection = DriverManager.getConnection(jdbcUrl, props)) {
                 long connectionTime = System.currentTimeMillis() - startTime;
+                
+                // Stop trace capture after connection established
+                jdbcTrace = traceCapture.stopCapture();
+                
                 log.info("Connection successful: {} ({}ms)", conn.getName(), connectionTime);
                 
                 // Get database version
@@ -130,10 +145,13 @@ public class ConnectionTester {
                 log.debug("Test query completed in {}ms", queryTime);
                 
                 return ConnectionResult.success(conn, databaseVersion, versionNumber, 
-                    connectionTime, queryTime);
+                    connectionTime, queryTime, jdbcTrace);
             }
             
         } catch (SQLException e) {
+            // Stop trace capture on failure
+            jdbcTrace = traceCapture.stopCapture();
+            
             long elapsedTime = System.currentTimeMillis() - startTime;
             log.error("Connection failed for {}: {} (after {}ms)", 
                 conn.getName(), sanitizeException(e), elapsedTime);
@@ -149,7 +167,8 @@ public class ConnectionTester {
                 sanitizeException(e),
                 errorCode,
                 errorType,
-                diagnostics);
+                diagnostics,
+                jdbcTrace);
         }
     }
     

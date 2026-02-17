@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
 import org.dbtest.cli.CommandLineArgs;
+import org.dbtest.diagnostics.JdbcTraceCapture;
 import org.dbtest.config.ConfigLoader;
 import org.dbtest.config.ConfigLoader.ConfigurationException;
 import org.dbtest.config.ConnectionDefinition;
@@ -30,6 +31,9 @@ public class Main {
     private static final String DEFAULT_CONFIG_FILE = "connections.yaml";
     
     public static void main(String[] args) {
+        // Configure Oracle JDBC logging before any JDBC classes are loaded
+        JdbcTraceCapture.configureLogging();
+        
         int exitCode = run(args);
         System.exit(exitCode);
     }
@@ -120,7 +124,7 @@ public class Main {
         }
         
         ConnectionTester connectionTester = new ConnectionTester(
-            passwordProviderFactory, diagnosticEngine, sshTunnelManager);
+            passwordProviderFactory, diagnosticEngine, sshTunnelManager, cliArgs.isVerbose());
         
         // Run tests
         long startTime = System.currentTimeMillis();
