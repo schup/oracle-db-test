@@ -1,0 +1,20 @@
+plugins {
+  alias libs.plugins.sonarqube 
+  id "jacoco"
+  id 'jacoco-report-aggregation'
+}
+
+reporting {
+    reports {
+        testCodeCoverageReport(JacocoCoverageReport) { 
+            testSuiteName = "test"
+        }
+    }
+}
+
+sonar {
+  properties {
+    property "sonar.projectKey", "schup_oracle-db-test"
+    property "sonar.organization", "schup"
+  }
+}

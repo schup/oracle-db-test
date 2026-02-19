@@ -1,6 +1,8 @@
 plugins {
     id 'java'
     id 'application'
+    id "jacoco"
+    alias libs.plugins.sonarqube 
     alias libs.plugins.shadow
     alias libs.plugins.lombok
 }
