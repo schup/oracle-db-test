@@ -57,8 +57,7 @@ public class ConnectionTester {
         }
         
         // Determine effective host/port (may be modified by SSH tunnel or SOCKS proxy)
-        String effectiveHost = conn.getHost();
-        int effectivePort = conn.getPort();
+        final HostPort effectiveHost = new HostPort(conn.getHost(), conn.getPort());
         
         // Set up SSH tunnel if configured
         if (conn.getSshTunnel() != null && !conn.getSshTunnel().isBlank() && sshTunnelManager != null) {
@@ -66,10 +65,10 @@ public class ConnectionTester {
                 log.info("Establishing SSH tunnel '{}' for connection {}", conn.getSshTunnel(), conn.getName());
                 SshTunnelManager.ActiveTunnel tunnel = sshTunnelManager.establishTunnel(
                     conn.getSshTunnel(), conn.getHost(), conn.getPort());
-                effectiveHost = "localhost";
-                effectivePort = tunnel.localPort();
-                log.info("Tunnel established: localhost:{} -> {}:{}", 
-                    effectivePort, conn.getHost(), conn.getPort());
+                effectiveHost.setHost("localhost");
+                effectiveHost.setPort(tunnel.localPort());
+                log.info("Tunnel established: {} -> {}:{}",  effectiveHost, conn.getHost(), conn.getPort());
+                
             } catch (SshException e) {
                 log.error("SSH tunnel setup failed for {}: {}", conn.getName(), e.getMessage());
                 DiagnosticResult diagnostics = diagnosticEngine.diagnoseSsh(conn, e);
@@ -87,12 +86,10 @@ public class ConnectionTester {
             try {
                 log.info("Setting up connection via SOCKS proxy '{}' for {}", conn.getSocksProxy(), conn.getName());
                 // Use local port forwarding through the SOCKS proxy session
-                int forwardedPort = sshTunnelManager.createSocksProxyForward(
-                    conn.getSocksProxy(), conn.getHost(), conn.getPort());
-                effectiveHost = "localhost";
-                effectivePort = forwardedPort;
-                log.info("SOCKS proxy forward established: localhost:{} -> {}:{}", 
-                    forwardedPort, conn.getHost(), conn.getPort());
+                sshTunnelManager.establishSocksProxy(conn.getSocksProxy());
+                //int forwardedPort = sshTunnelManager.createSocksProxyForward(conn.getSocksProxy(), conn.getHost(), conn.getPort());
+
+                log.info("SOCKS proxy forward established: {} -> {}:{}", conn.getSocksProxy(), conn.getHost(), conn.getPort());
             } catch (SshException e) {
                 log.error("SOCKS proxy setup failed for {}: {}", conn.getName(), e.getMessage());
                 DiagnosticResult diagnostics = diagnosticEngine.diagnoseSsh(conn, e);
@@ -104,19 +101,23 @@ public class ConnectionTester {
                     null);
             }
         }
-        
+
+        return testConnection(conn, effectiveHost, password);
+    }
+
+    private ConnectionResult testConnection(ConnectionDefinition conn, HostPort effectiveHost, String password) {
         // Build JDBC URL with effective host/port
-        String jdbcUrl = buildJdbcUrl(effectiveHost, effectivePort, conn);
+        String jdbcUrl = buildJdbcUrl(effectiveHost.getHost(), effectiveHost.getPort(), conn);
         log.debug("Connecting to: {}", sanitizeJdbcUrl(jdbcUrl));
-        
+
         // Start JDBC trace capture
         JdbcTraceCapture traceCapture = new JdbcTraceCapture(verbose);
         traceCapture.startCapture();
-        
+
         // Attempt connection
         long startTime = System.currentTimeMillis();
         JdbcTraceInfo jdbcTrace = null;
-        
+
         try {
             Properties props = new Properties();
             props.setProperty("user", conn.getUsername());
@@ -143,9 +144,9 @@ public class ConnectionTester {
                 long queryTime = System.currentTimeMillis() - queryStartTime;
                 
                 log.debug("Test query completed in {}ms", queryTime);
-                
-                return ConnectionResult.success(conn, databaseVersion, versionNumber, 
-                    connectionTime, queryTime, jdbcTrace);
+
+                return ConnectionResult.success(conn, databaseVersion, versionNumber,
+                        connectionTime, queryTime, jdbcTrace);
             }
             
         } catch (SQLException e) {
@@ -162,16 +163,16 @@ public class ConnectionTester {
             // Extract Oracle error code
             String errorCode = extractOracleErrorCode(e);
             String errorType = diagnostics != null ? diagnostics.getErrorType() : "UNKNOWN";
-            
-            return ConnectionResult.failure(conn, 
-                sanitizeException(e),
-                errorCode,
-                errorType,
-                diagnostics,
-                jdbcTrace);
+
+            return ConnectionResult.failure(conn,
+                    sanitizeException(e),
+                    errorCode,
+                    errorType,
+                    diagnostics,
+                    jdbcTrace);
         }
     }
-    
+
     /**
      * Builds the JDBC URL for the connection using effective host/port.
      */
